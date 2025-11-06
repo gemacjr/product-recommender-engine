@@ -22,20 +22,20 @@ spring:
   # Spring AI Configuration
   ai:
     openai:
-      api-key: ${OPENAI_API_KEY}
+      api-key: ${OPENAI_API_KEY}  # Set this as environment variable
       chat:
         options:
-          model: gpt-4o
+          model: gpt-4o  # or gpt-4, gpt-3.5-turbo
           temperature: 0.7
       embedding:
         options:
-          model: text-embedding-3-small
+          model: text-embedding-3-small  # or text-embedding-3-large
 
     vectorstore:
       pgvector:
-        index-type: HNSW
-        distance-type: COSINE_DISTANCE
-        dimensions: 1536
+        index-type: HNSW  # HNSW (Hierarchical Navigable Small World) for fast approximate search
+        distance-type: COSINE_DISTANCE  # COSINE_DISTANCE, EUCLIDEAN_DISTANCE, or INNER_PRODUCT
+        dimensions: 1536  # Must match the embedding model dimensions
         remove-existing-vector-store-table: false
         initialize-schema: true
 
@@ -52,11 +52,11 @@ application:
     default-limit: 10
     max-limit: 100
   recommendation:
-    similarity-threshold: 0.7
+    similarity-threshold: 0.7  # Minimum similarity score (0-1)
     max-results: 20
   rag:
-    context-window-size: 5
-    temperature: 0.3
+    context-window-size: 5  # Number of context documents to retrieve
+    temperature: 0.3  # LLM temperature for RAG responses
 
 # Logging Configuration
 logging:
