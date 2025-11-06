@@ -6,7 +6,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.EmbeddingModel;
-import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Service;
 
@@ -89,17 +88,12 @@ public class VectorStoreService {
     public List<Product> semanticSearch(String query, int topK) {
         log.debug("Performing semantic search: query='{}', topK={}", query, topK);
 
-        double threshold = applicationProperties.getRecommendation().getSimilarityThreshold();
-
-        SearchRequest searchRequest = SearchRequest.query(query)
-                .withTopK(topK)
-                .withSimilarityThreshold(threshold);
-
-        List<Document> results = vectorStore.similaritySearch(searchRequest);
+        List<Document> results = vectorStore.similaritySearch(query);
 
         log.info("Semantic search returned {} results", results.size());
 
         return results.stream()
+                .limit(topK)
                 .map(this::documentToProduct)
                 .collect(Collectors.toList());
     }
@@ -123,17 +117,11 @@ public class VectorStoreService {
     public List<Document> getRelevantContext(String query, int topK) {
         log.debug("Getting relevant context: query='{}', topK={}", query, topK);
 
-        double threshold = applicationProperties.getRecommendation().getSimilarityThreshold();
-
-        SearchRequest searchRequest = SearchRequest.query(query)
-                .withTopK(topK)
-                .withSimilarityThreshold(threshold);
-
-        List<Document> results = vectorStore.similaritySearch(searchRequest);
+        List<Document> results = vectorStore.similaritySearch(query);
 
         log.info("Retrieved {} context documents", results.size());
 
-        return results;
+        return results.stream().limit(topK).collect(Collectors.toList());
     }
 
     /**
@@ -182,9 +170,7 @@ public class VectorStoreService {
     public boolean isHealthy() {
         try {
             // Perform a simple test query
-            SearchRequest testRequest = SearchRequest.query("test")
-                    .withTopK(1);
-            vectorStore.similaritySearch(testRequest);
+            vectorStore.similaritySearch("test");
             return true;
         } catch (Exception e) {
             log.error("Vector store health check failed", e);

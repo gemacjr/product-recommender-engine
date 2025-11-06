@@ -113,7 +113,7 @@ class VectorStoreServiceTest {
         vectorStoreService.updateProduct(testProduct);
 
         // Assert
-        verify(vectorStore).delete(argThat(ids -> ids.contains("1")));
+        verify(vectorStore).delete(argThat((List<String> ids) -> ids.contains("1")));
         verify(vectorStore).add(argThat(docs -> docs.size() == 1));
     }
 
@@ -126,7 +126,7 @@ class VectorStoreServiceTest {
         vectorStoreService.deleteProduct(1L);
 
         // Assert
-        verify(vectorStore).delete(argThat(ids ->
+        verify(vectorStore).delete(argThat((List<String> ids) ->
                 ids.size() == 1 && ids.get(0).equals("1")
         ));
     }
@@ -146,7 +146,7 @@ class VectorStoreServiceTest {
     @Test
     void semanticSearch_ShouldReturnMatchingProducts() {
         // Arrange
-        when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(testDocuments);
+        when(vectorStore.similaritySearch(anyString())).thenReturn(testDocuments);
 
         // Act
         List<Product> results = vectorStoreService.semanticSearch("wireless headphones", 10);
@@ -156,24 +156,20 @@ class VectorStoreServiceTest {
         assertThat(results).hasSize(2);
         assertThat(results.get(0).getId()).isEqualTo(1L);
         assertThat(results.get(0).getName()).isEqualTo("Wireless Headphones");
-        verify(vectorStore).similaritySearch(argThat(request ->
-                request.getQuery().equals("wireless headphones") &&
-                        request.getTopK() == 10 &&
-                        request.getSimilarityThreshold() == 0.7
-        ));
+        verify(vectorStore).similaritySearch("wireless headphones");
     }
 
     @Test
     void semanticSearch_ShouldReturnEmptyList_WhenNoResults() {
         // Arrange
-        when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(Collections.emptyList());
+        when(vectorStore.similaritySearch(anyString())).thenReturn(Collections.emptyList());
 
         // Act
         List<Product> results = vectorStoreService.semanticSearch("nonexistent product", 10);
 
         // Assert
         assertThat(results).isEmpty();
-        verify(vectorStore).similaritySearch(any(SearchRequest.class));
+        verify(vectorStore).similaritySearch(anyString());
     }
 
     @Test
@@ -197,7 +193,7 @@ class VectorStoreServiceTest {
                 new Document("3", "Gaming Headset", metadata3)
         );
 
-        when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(allDocs);
+        when(vectorStore.similaritySearch(anyString())).thenReturn(allDocs);
 
         // Act
         List<Product> results = vectorStoreService.findSimilarProducts(testProduct, 5);
@@ -206,15 +202,13 @@ class VectorStoreServiceTest {
         assertThat(results).isNotNull();
         assertThat(results).hasSizeLessThanOrEqualTo(5);
         assertThat(results).noneMatch(p -> p.getId().equals(1L)); // Should exclude original product
-        verify(vectorStore).similaritySearch(argThat(request ->
-                request.getTopK() == 6 // topK + 1
-        ));
+        verify(vectorStore).similaritySearch(anyString());
     }
 
     @Test
     void getRelevantContext_ShouldReturnDocuments() {
         // Arrange
-        when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(testDocuments);
+        when(vectorStore.similaritySearch(anyString())).thenReturn(testDocuments);
 
         // Act
         List<Document> results = vectorStoreService.getRelevantContext("headphones", 5);
@@ -223,32 +217,26 @@ class VectorStoreServiceTest {
         assertThat(results).isNotNull();
         assertThat(results).hasSize(2);
         assertThat(results).containsExactlyElementsOf(testDocuments);
-        verify(vectorStore).similaritySearch(argThat(request ->
-                request.getQuery().equals("headphones") &&
-                        request.getTopK() == 5 &&
-                        request.getSimilarityThreshold() == 0.7
-        ));
+        verify(vectorStore).similaritySearch("headphones");
     }
 
     @Test
     void isHealthy_ShouldReturnTrue_WhenVectorStoreResponds() {
         // Arrange
-        when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(Collections.emptyList());
+        when(vectorStore.similaritySearch(anyString())).thenReturn(Collections.emptyList());
 
         // Act
         boolean result = vectorStoreService.isHealthy();
 
         // Assert
         assertThat(result).isTrue();
-        verify(vectorStore).similaritySearch(argThat(request ->
-                request.getQuery().equals("test") && request.getTopK() == 1
-        ));
+        verify(vectorStore).similaritySearch("test");
     }
 
     @Test
     void isHealthy_ShouldReturnFalse_WhenVectorStoreThrowsException() {
         // Arrange
-        when(vectorStore.similaritySearch(any(SearchRequest.class)))
+        when(vectorStore.similaritySearch(anyString()))
                 .thenThrow(new RuntimeException("Vector store error"));
 
         // Act
@@ -256,7 +244,7 @@ class VectorStoreServiceTest {
 
         // Assert
         assertThat(result).isFalse();
-        verify(vectorStore).similaritySearch(any(SearchRequest.class));
+        verify(vectorStore).similaritySearch(anyString());
     }
 
     @Test

@@ -7,6 +7,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
@@ -72,8 +73,8 @@ class RagServiceTest {
 
         // Setup mock ChatModel response
         mockGeneration = mock(Generation.class);
-        org.springframework.ai.chat.model.Generation.Output mockOutput = mock(org.springframework.ai.chat.model.Generation.Output.class);
-        when(mockOutput.getContent()).thenReturn("This is a test AI response");
+        AssistantMessage mockOutput = mock(AssistantMessage.class);
+        when(mockOutput.getText()).thenReturn("This is a test AI response");
         when(mockGeneration.getOutput()).thenReturn(mockOutput);
 
         mockChatResponse = mock(ChatResponse.class);

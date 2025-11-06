@@ -246,7 +246,7 @@ public class RagService {
         for (int i = 0; i < documents.size(); i++) {
             Document doc = documents.get(i);
             contextBuilder.append(String.format("Product %d:\n", i + 1));
-            contextBuilder.append(doc.getContent());
+            contextBuilder.append(doc.getText());
             contextBuilder.append("\n");
 
             // Add metadata if available
@@ -291,7 +291,7 @@ public class RagService {
         messages.add(new UserMessage(userPrompt));
 
         Prompt prompt = new Prompt(messages);
-        return chatModel.call(prompt).getResult().getOutput().getContent();
+        return chatModel.call(prompt).getResult().getOutput().getText();
     }
 
     /**
@@ -354,7 +354,7 @@ public class RagService {
         messages.add(new UserMessage(userPrompt));
 
         Prompt prompt = new Prompt(messages);
-        return chatModel.call(prompt).getResult().getOutput().getContent();
+        return chatModel.call(prompt).getResult().getOutput().getText();
     }
 
     /**

@@ -97,15 +97,16 @@ public class TestDataFactory {
     public static QueryRequest createQueryRequest(String query) {
         return QueryRequest.builder()
                 .query(query)
-                .customerId(1L)
+                .userPreferences("tech enthusiast")
+                .context("product search")
                 .build();
     }
 
     public static RecommendationRequest createRecommendationRequest() {
         return RecommendationRequest.builder()
-                .customerId(1L)
+                .userPreferences("electronics and gaming")
                 .limit(10)
-                .preferences(Arrays.asList("electronics", "gaming"))
+                .viewedProductIds(Arrays.asList(1L, 2L, 3L))
                 .build();
     }
 

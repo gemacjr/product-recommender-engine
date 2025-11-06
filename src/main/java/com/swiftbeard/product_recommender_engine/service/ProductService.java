@@ -224,7 +224,7 @@ public class ProductService {
         );
 
         Prompt generatedPrompt = prompt.create(params);
-        String personalizedDescription = chatModel.call(generatedPrompt).getResult().getOutput().getContent();
+        String personalizedDescription = chatModel.call(generatedPrompt).getResult().getOutput().getText();
 
         log.info("Generated personalized description for product: {}", productId);
         return personalizedDescription;

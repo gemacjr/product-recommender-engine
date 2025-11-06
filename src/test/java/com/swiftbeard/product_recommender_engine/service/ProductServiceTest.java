@@ -11,6 +11,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
@@ -294,11 +295,9 @@ class ProductServiceTest {
         when(productRepository.findById(1L)).thenReturn(Optional.of(testProduct));
 
         Generation generation = mock(Generation.class);
-        when(generation.getContent()).thenReturn("This amazing wireless headphone is perfect for music lovers!");
-
-        org.springframework.ai.chat.model.Generation.Output output = mock(org.springframework.ai.chat.model.Generation.Output.class);
-        when(output.getContent()).thenReturn("This amazing wireless headphone is perfect for music lovers!");
-        when(generation.getOutput()).thenReturn(output);
+        AssistantMessage assistantMessage = mock(AssistantMessage.class);
+        when(assistantMessage.getText()).thenReturn("This amazing wireless headphone is perfect for music lovers!");
+        when(generation.getOutput()).thenReturn(assistantMessage);
 
         ChatResponse chatResponse = mock(ChatResponse.class);
         when(chatResponse.getResult()).thenReturn(generation);

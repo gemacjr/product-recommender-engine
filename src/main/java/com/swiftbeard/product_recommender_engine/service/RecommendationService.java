@@ -33,15 +33,8 @@ public class RecommendationService {
 
         List<Product> similarProducts = vectorStoreService.findSimilarProducts(product, maxResults);
 
-        // Fetch full product details
-        List<Long> productIds = similarProducts.stream()
-                .map(Product::getId)
-                .collect(Collectors.toList());
-
         log.info("Found {} similar products for product {}", similarProducts.size(), productId);
-        return productService.getProductById(productIds.get(0)) != null ?
-                productIds.stream().map(productService::getProductById).collect(Collectors.toList()) :
-                similarProducts;
+        return similarProducts;
     }
 
     /**
