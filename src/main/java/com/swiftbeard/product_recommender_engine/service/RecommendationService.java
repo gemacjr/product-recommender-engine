@@ -67,12 +67,12 @@ public class RecommendationService {
      * Get recommendations based on browsing history
      */
     public List<Product> getRecommendationsFromHistory(List<Long> viewedProductIds, int limit) {
-        log.debug("Getting recommendations from browsing history of {} products", viewedProductIds.size());
-
         if (viewedProductIds == null || viewedProductIds.isEmpty()) {
             log.warn("No browsing history provided");
             return Collections.emptyList();
         }
+
+        log.debug("Getting recommendations from browsing history of {} products", viewedProductIds.size());
 
         // Get the most recently viewed products
         List<Long> recentProducts = viewedProductIds.stream()

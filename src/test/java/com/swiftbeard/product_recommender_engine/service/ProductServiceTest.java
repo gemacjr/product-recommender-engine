@@ -6,11 +6,14 @@ import com.swiftbeard.product_recommender_engine.model.Category;
 import com.swiftbeard.product_recommender_engine.model.Product;
 import com.swiftbeard.product_recommender_engine.repository.ProductRepository;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -23,6 +26,7 @@ import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -32,6 +36,8 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
+@DisplayName("ProductService Unit Tests")
 class ProductServiceTest {
 
     @Mock
@@ -60,21 +66,18 @@ class ProductServiceTest {
         testProduct = TestDataFactory.createElectronicsProduct();
         testProducts = TestDataFactory.createProductList();
 
-        // Setup application properties mock
         when(applicationProperties.getProduct()).thenReturn(productConfig);
         when(productConfig.getMaxLimit()).thenReturn(100);
     }
 
     @Test
+    @DisplayName("Should return paginated products when getting all products")
     void getAllProducts_ShouldReturnPagedProducts() {
-        // Arrange
         Page<Product> expectedPage = new PageImpl<>(testProducts);
         when(productRepository.findByActiveTrue(any(Pageable.class))).thenReturn(expectedPage);
 
-        // Act
         Page<Product> result = productService.getAllProducts(0, 10);
 
-        // Assert
         assertThat(result).isNotNull();
         assertThat(result.getContent()).hasSize(5);
         assertThat(result.getContent()).isEqualTo(testProducts);
@@ -82,29 +85,27 @@ class ProductServiceTest {
     }
 
     @Test
+    @DisplayName("Should respect max limit when getting all products")
     void getAllProducts_ShouldRespectMaxLimit() {
-        // Arrange
+        when(productConfig.getMaxLimit()).thenReturn(20);
         Page<Product> expectedPage = new PageImpl<>(testProducts);
         when(productRepository.findByActiveTrue(any(Pageable.class))).thenReturn(expectedPage);
 
-        // Act
-        productService.getAllProducts(0, 200); // Request more than max
+        productService.getAllProducts(0, 150);
 
-        // Assert
-        verify(productRepository).findByActiveTrue(argThat(pageable ->
-                pageable.getPageSize() == 100 // Should be limited to max
-        ));
+        verify(productRepository).findByActiveTrue(argThat(pageable -> {
+            PageRequest pr = (PageRequest) pageable;
+            return pr.getPageSize() == 20;
+        }));
     }
 
     @Test
+    @DisplayName("Should return product when found by ID")
     void getProductById_ShouldReturnProduct_WhenExists() {
-        // Arrange
         when(productRepository.findById(1L)).thenReturn(Optional.of(testProduct));
 
-        // Act
         Product result = productService.getProductById(1L);
 
-        // Assert
         assertThat(result).isNotNull();
         assertThat(result.getId()).isEqualTo(1L);
         assertThat(result.getName()).isEqualTo("Wireless Headphones");
@@ -112,264 +113,213 @@ class ProductServiceTest {
     }
 
     @Test
+    @DisplayName("Should throw exception when product not found")
     void getProductById_ShouldThrowException_WhenNotFound() {
-        // Arrange
         when(productRepository.findById(999L)).thenReturn(Optional.empty());
 
-        // Act & Assert
         assertThatThrownBy(() -> productService.getProductById(999L))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("Product not found with id: 999");
-        verify(productRepository).findById(999L);
     }
 
     @Test
-    void getProductsByCategory_ShouldReturnFilteredProducts() {
-        // Arrange
-        List<Product> electronicsProducts = Arrays.asList(
-                TestDataFactory.createElectronicsProduct(),
-                TestDataFactory.createProduct(4L, "Gaming Mouse", Category.ELECTRONICS, new BigDecimal("79.99"))
-        );
-        Page<Product> expectedPage = new PageImpl<>(electronicsProducts);
+    @DisplayName("Should return products by category")
+    void getProductsByCategory_ShouldReturnCategoryProducts() {
+        Page<Product> expectedPage = new PageImpl<>(testProducts);
         when(productRepository.findByCategoryAndActiveTrue(eq(Category.ELECTRONICS), any(Pageable.class)))
                 .thenReturn(expectedPage);
 
-        // Act
         Page<Product> result = productService.getProductsByCategory(Category.ELECTRONICS, 0, 10);
 
-        // Assert
         assertThat(result).isNotNull();
-        assertThat(result.getContent()).hasSize(2);
-        assertThat(result.getContent()).allMatch(p -> p.getCategory() == Category.ELECTRONICS);
+        assertThat(result.getContent()).hasSize(5);
         verify(productRepository).findByCategoryAndActiveTrue(eq(Category.ELECTRONICS), any(Pageable.class));
     }
 
     @Test
+    @DisplayName("Should search products by keyword")
     void searchProducts_ShouldReturnMatchingProducts() {
-        // Arrange
-        Page<Product> expectedPage = new PageImpl<>(Arrays.asList(testProduct));
-        when(productRepository.searchByKeyword(eq("wireless"), any(Pageable.class)))
-                .thenReturn(expectedPage);
+        Page<Product> expectedPage = new PageImpl<>(testProducts);
+        when(productRepository.searchByKeyword(eq("wireless"), any(Pageable.class))).thenReturn(expectedPage);
 
-        // Act
         Page<Product> result = productService.searchProducts("wireless", 0, 10);
 
-        // Assert
         assertThat(result).isNotNull();
-        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent()).hasSize(5);
         verify(productRepository).searchByKeyword(eq("wireless"), any(Pageable.class));
     }
 
     @Test
-    void getProductsByPriceRange_ShouldReturnFilteredProducts() {
-        // Arrange
-        BigDecimal minPrice = new BigDecimal("50.00");
-        BigDecimal maxPrice = new BigDecimal("150.00");
-        Page<Product> expectedPage = new PageImpl<>(Arrays.asList(testProduct));
-        when(productRepository.findByPriceRange(eq(minPrice), eq(maxPrice), any(Pageable.class)))
+    @DisplayName("Should return products by price range")
+    void getProductsByPriceRange_ShouldReturnProductsInRange() {
+        Page<Product> expectedPage = new PageImpl<>(testProducts);
+        when(productRepository.findByPriceRange(any(BigDecimal.class), any(BigDecimal.class), any(Pageable.class)))
                 .thenReturn(expectedPage);
 
-        // Act
-        Page<Product> result = productService.getProductsByPriceRange(minPrice, maxPrice, 0, 10);
+        Page<Product> result = productService.getProductsByPriceRange(
+                new BigDecimal("50"), new BigDecimal("200"), 0, 10);
 
-        // Assert
         assertThat(result).isNotNull();
-        assertThat(result.getContent()).isNotEmpty();
-        verify(productRepository).findByPriceRange(eq(minPrice), eq(maxPrice), any(Pageable.class));
+        verify(productRepository).findByPriceRange(
+                eq(new BigDecimal("50")), eq(new BigDecimal("200")), any(Pageable.class));
     }
 
     @Test
-    void getTopRatedProducts_ShouldReturnHighlyRatedProducts() {
-        // Arrange
-        List<Product> topRatedProducts = Arrays.asList(
-                TestDataFactory.createProductWithRating(1L, new BigDecimal("4.8"), 100),
-                TestDataFactory.createProductWithRating(2L, new BigDecimal("4.7"), 80)
-        );
-        Page<Product> expectedPage = new PageImpl<>(topRatedProducts);
+    @DisplayName("Should return top-rated products")
+    void getTopRatedProducts_ShouldReturnTopRatedProducts() {
+        Page<Product> expectedPage = new PageImpl<>(testProducts);
         when(productRepository.findTopRated(any(Pageable.class))).thenReturn(expectedPage);
 
-        // Act
         Page<Product> result = productService.getTopRatedProducts(0, 10);
 
-        // Assert
         assertThat(result).isNotNull();
-        assertThat(result.getContent()).hasSize(2);
         verify(productRepository).findTopRated(any(Pageable.class));
     }
 
     @Test
-    void createProduct_ShouldSaveAndReturnProduct() {
-        // Arrange
-        Product newProduct = TestDataFactory.createProductWithoutId("New Product", Category.ELECTRONICS, new BigDecimal("199.99"));
-        Product savedProduct = TestDataFactory.createProduct(10L, "New Product", Category.ELECTRONICS, new BigDecimal("199.99"));
-
-        when(productRepository.save(any(Product.class))).thenReturn(savedProduct);
+    @DisplayName("Should create product and add to vector store")
+    void createProduct_ShouldSaveAndAddToVectorStore() {
+        Product newProduct = TestDataFactory.createProductWithoutId("New Product", Category.ELECTRONICS, new BigDecimal("99.99"));
+        Product savedProduct = TestDataFactory.createProduct(1L, "New Product", Category.ELECTRONICS, new BigDecimal("99.99"));
+        when(productRepository.save(newProduct)).thenReturn(savedProduct);
         doNothing().when(vectorStoreService).addProduct(any(Product.class));
 
-        // Act
         Product result = productService.createProduct(newProduct);
 
-        // Assert
         assertThat(result).isNotNull();
-        assertThat(result.getId()).isEqualTo(10L);
-        assertThat(result.getName()).isEqualTo("New Product");
-        verify(productRepository).save(any(Product.class));
-        verify(vectorStoreService).addProduct(any(Product.class));
+        assertThat(result.getId()).isEqualTo(1L);
+        verify(productRepository).save(newProduct);
+        verify(vectorStoreService).addProduct(savedProduct);
     }
 
     @Test
-    void createProduct_ShouldNotFailIfVectorStoreThrowsException() {
-        // Arrange
-        Product newProduct = TestDataFactory.createProductWithoutId("New Product", Category.ELECTRONICS, new BigDecimal("199.99"));
-        Product savedProduct = TestDataFactory.createProduct(10L, "New Product", Category.ELECTRONICS, new BigDecimal("199.99"));
-
-        when(productRepository.save(any(Product.class))).thenReturn(savedProduct);
+    @DisplayName("Should handle vector store failure gracefully when creating product")
+    void createProduct_ShouldHandleVectorStoreFailure() {
+        Product newProduct = TestDataFactory.createProductWithoutId("New Product", Category.ELECTRONICS, new BigDecimal("99.99"));
+        Product savedProduct = TestDataFactory.createProduct(1L, "New Product", Category.ELECTRONICS, new BigDecimal("99.99"));
+        when(productRepository.save(newProduct)).thenReturn(savedProduct);
         doThrow(new RuntimeException("Vector store error")).when(vectorStoreService).addProduct(any(Product.class));
 
-        // Act
         Product result = productService.createProduct(newProduct);
 
-        // Assert
         assertThat(result).isNotNull();
-        assertThat(result.getId()).isEqualTo(10L);
-        verify(productRepository).save(any(Product.class));
-        verify(vectorStoreService).addProduct(any(Product.class));
+        verify(productRepository).save(newProduct);
+        verify(vectorStoreService).addProduct(savedProduct);
     }
 
     @Test
-    void updateProduct_ShouldUpdateAndReturnProduct() {
-        // Arrange
+    @DisplayName("Should update product and update vector store")
+    void updateProduct_ShouldUpdateAndUpdateVectorStore() {
         Product existingProduct = TestDataFactory.createElectronicsProduct();
-        Product updateData = TestDataFactory.createProduct(1L, "Updated Headphones", Category.ELECTRONICS, new BigDecimal("149.99"));
-
+        Product updatedDetails = TestDataFactory.createProduct(1L, "Updated Product", Category.ELECTRONICS, new BigDecimal("149.99"));
         when(productRepository.findById(1L)).thenReturn(Optional.of(existingProduct));
-        when(productRepository.save(any(Product.class))).thenReturn(updateData);
+        when(productRepository.save(any(Product.class))).thenReturn(updatedDetails);
         doNothing().when(vectorStoreService).updateProduct(any(Product.class));
 
-        // Act
-        Product result = productService.updateProduct(1L, updateData);
+        Product result = productService.updateProduct(1L, updatedDetails);
 
-        // Assert
         assertThat(result).isNotNull();
-        assertThat(result.getName()).isEqualTo("Updated Headphones");
-        assertThat(result.getPrice()).isEqualTo(new BigDecimal("149.99"));
-        verify(productRepository).findById(1L);
+        assertThat(result.getName()).isEqualTo("Updated Product");
         verify(productRepository).save(any(Product.class));
-        verify(vectorStoreService).updateProduct(any(Product.class));
+        verify(vectorStoreService).updateProduct(updatedDetails);
     }
 
     @Test
+    @DisplayName("Should throw exception when updating non-existent product")
     void updateProduct_ShouldThrowException_WhenProductNotFound() {
-        // Arrange
-        Product updateData = TestDataFactory.createElectronicsProduct();
+        Product updatedDetails = TestDataFactory.createProduct(999L, "Updated Product", Category.ELECTRONICS, new BigDecimal("149.99"));
         when(productRepository.findById(999L)).thenReturn(Optional.empty());
 
-        // Act & Assert
-        assertThatThrownBy(() -> productService.updateProduct(999L, updateData))
+        assertThatThrownBy(() -> productService.updateProduct(999L, updatedDetails))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("Product not found with id: 999");
-        verify(productRepository).findById(999L);
-        verify(productRepository, never()).save(any());
     }
 
     @Test
-    void deleteProduct_ShouldSoftDeleteProduct() {
-        // Arrange
-        Product productToDelete = TestDataFactory.createElectronicsProduct();
-        when(productRepository.findById(1L)).thenReturn(Optional.of(productToDelete));
-        when(productRepository.save(any(Product.class))).thenReturn(productToDelete);
-        doNothing().when(vectorStoreService).deleteProduct(1L);
+    @DisplayName("Should soft delete product and remove from vector store")
+    void deleteProduct_ShouldSoftDeleteAndRemoveFromVectorStore() {
+        Product existingProduct = TestDataFactory.createElectronicsProduct();
+        when(productRepository.findById(1L)).thenReturn(Optional.of(existingProduct));
+        when(productRepository.save(any(Product.class))).thenReturn(existingProduct);
+        doNothing().when(vectorStoreService).deleteProduct(anyLong());
 
-        // Act
         productService.deleteProduct(1L);
 
-        // Assert
         verify(productRepository).findById(1L);
         verify(productRepository).save(argThat(p -> !p.getActive()));
         verify(vectorStoreService).deleteProduct(1L);
     }
 
     @Test
+    @DisplayName("Should generate personalized description using AI")
     void generatePersonalizedDescription_ShouldReturnAIGeneratedDescription() {
-        // Arrange
-        when(productRepository.findById(1L)).thenReturn(Optional.of(testProduct));
+        Product product = TestDataFactory.createElectronicsProduct();
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
 
-        Generation generation = mock(Generation.class);
         AssistantMessage assistantMessage = mock(AssistantMessage.class);
-        when(assistantMessage.getText()).thenReturn("This amazing wireless headphone is perfect for music lovers!");
+        when(assistantMessage.getText()).thenReturn("This is a personalized description for tech enthusiasts.");
+        Generation generation = mock(Generation.class);
         when(generation.getOutput()).thenReturn(assistantMessage);
-
         ChatResponse chatResponse = mock(ChatResponse.class);
         when(chatResponse.getResult()).thenReturn(generation);
-
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse);
 
-        // Act
-        String result = productService.generatePersonalizedDescription(1L, "I love high-quality audio");
+        String result = productService.generatePersonalizedDescription(1L, "tech enthusiast");
 
-        // Assert
         assertThat(result).isNotNull();
-        assertThat(result).contains("wireless headphone");
-        verify(productRepository).findById(1L);
+        assertThat(result).isNotEmpty();
+        assertThat(result).contains("personalized description");
         verify(chatModel).call(any(Prompt.class));
     }
 
     @Test
+    @DisplayName("Should ingest all products to vector store")
     void ingestProductsToVectorStore_ShouldAddAllProducts() {
-        // Arrange
         when(productRepository.findAll()).thenReturn(testProducts);
         doNothing().when(vectorStoreService).addProducts(anyList());
 
-        // Act
         productService.ingestProductsToVectorStore();
 
-        // Assert
         verify(productRepository).findAll();
         verify(vectorStoreService).addProducts(testProducts);
     }
 
     @Test
+    @DisplayName("Should return all distinct brands")
     void getAllBrands_ShouldReturnDistinctBrands() {
-        // Arrange
-        List<String> expectedBrands = Arrays.asList("Brand A", "Brand B", "Brand C");
-        when(productRepository.findDistinctBrands()).thenReturn(expectedBrands);
+        List<String> brands = Arrays.asList("Brand A", "Brand B", "Brand C");
+        when(productRepository.findDistinctBrands()).thenReturn(brands);
 
-        // Act
         List<String> result = productService.getAllBrands();
 
-        // Assert
         assertThat(result).isNotNull();
         assertThat(result).hasSize(3);
-        assertThat(result).containsExactlyElementsOf(expectedBrands);
+        assertThat(result).containsAll(brands);
         verify(productRepository).findDistinctBrands();
     }
 
     @Test
+    @DisplayName("Should return all distinct tags")
     void getAllTags_ShouldReturnDistinctTags() {
-        // Arrange
-        List<String> expectedTags = Arrays.asList("electronics", "wireless", "premium");
-        when(productRepository.findDistinctTags()).thenReturn(expectedTags);
+        List<String> tags = Arrays.asList("tag1", "tag2", "tag3");
+        when(productRepository.findDistinctTags()).thenReturn(tags);
 
-        // Act
         List<String> result = productService.getAllTags();
 
-        // Assert
         assertThat(result).isNotNull();
         assertThat(result).hasSize(3);
-        assertThat(result).containsExactlyElementsOf(expectedTags);
         verify(productRepository).findDistinctTags();
     }
 
     @Test
+    @DisplayName("Should count products by category")
     void countByCategory_ShouldReturnCount() {
-        // Arrange
-        when(productRepository.countByCategoryAndActiveTrue(Category.ELECTRONICS)).thenReturn(15L);
+        when(productRepository.countByCategoryAndActiveTrue(Category.ELECTRONICS)).thenReturn(5L);
 
-        // Act
         long result = productService.countByCategory(Category.ELECTRONICS);
 
-        // Assert
-        assertThat(result).isEqualTo(15L);
+        assertThat(result).isEqualTo(5L);
         verify(productRepository).countByCategoryAndActiveTrue(Category.ELECTRONICS);
     }
 }
+

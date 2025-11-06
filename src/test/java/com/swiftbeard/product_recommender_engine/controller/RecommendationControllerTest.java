@@ -5,6 +5,7 @@ import com.swiftbeard.product_recommender_engine.TestDataFactory;
 import com.swiftbeard.product_recommender_engine.dto.RecommendationRequest;
 import com.swiftbeard.product_recommender_engine.model.Product;
 import com.swiftbeard.product_recommender_engine.service.RecommendationService;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -18,12 +19,12 @@ import java.util.List;
 
 import static org.hamcrest.Matchers.*;
 import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(RecommendationController.class)
+@DisplayName("RecommendationController Unit Tests")
 class RecommendationControllerTest {
 
     @Autowired
@@ -36,51 +37,42 @@ class RecommendationControllerTest {
     private RecommendationService recommendationService;
 
     @Test
+    @DisplayName("Should return similar products")
     void getSimilarProducts_ShouldReturnSimilarProducts() throws Exception {
-        // Arrange
-        List<Product> similarProducts = Arrays.asList(
-                TestDataFactory.createElectronicsProduct(),
-                TestDataFactory.createClothingProduct()
-        );
-        when(recommendationService.getSimilarProducts(1L, 10)).thenReturn(similarProducts);
+        List<Product> similar = Arrays.asList(TestDataFactory.createElectronicsProduct());
+        when(recommendationService.getSimilarProducts(1L, 10)).thenReturn(similar);
 
-        // Act & Assert
         mockMvc.perform(get("/api/recommendations/similar/1")
                         .param("limit", "10"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(2)))
-                .andExpect(jsonPath("$[0].id", is(1)))
-                .andExpect(jsonPath("$[1].id", is(2)));
+                .andExpect(jsonPath("$", hasSize(1)));
 
         verify(recommendationService).getSimilarProducts(1L, 10);
     }
 
     @Test
+    @DisplayName("Should return recommendations by query")
     void getRecommendationsByQuery_ShouldReturnRecommendations() throws Exception {
-        // Arrange
-        List<Product> recommendations = Arrays.asList(TestDataFactory.createElectronicsProduct());
-        when(recommendationService.getRecommendationsByQuery("wireless headphones", 10))
-                .thenReturn(recommendations);
+        List<Product> recommendations = TestDataFactory.createProductList();
+        when(recommendationService.getRecommendationsByQuery("wireless headphones", 10)).thenReturn(recommendations);
 
-        // Act & Assert
         mockMvc.perform(get("/api/recommendations/search")
                         .param("query", "wireless headphones")
                         .param("limit", "10"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)));
+                .andExpect(jsonPath("$", hasSize(5)));
 
         verify(recommendationService).getRecommendationsByQuery("wireless headphones", 10);
     }
 
     @Test
+    @DisplayName("Should return personalized recommendations")
     void getPersonalizedRecommendations_ShouldReturnPersonalizedProducts() throws Exception {
-        // Arrange
         RecommendationRequest request = TestDataFactory.createRecommendationRequest();
         List<Product> recommendations = TestDataFactory.createProductList();
         when(recommendationService.getPersonalizedRecommendations(anyString(), anyInt()))
                 .thenReturn(recommendations);
 
-        // Act & Assert
         mockMvc.perform(post("/api/recommendations/personalized")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
@@ -91,18 +83,19 @@ class RecommendationControllerTest {
     }
 
     @Test
+    @DisplayName("Should return recommendations from browsing history")
     void getRecommendationsFromHistory_ShouldReturnRecommendations() throws Exception {
-        // Arrange
-        List<Long> viewedIds = Arrays.asList(1L, 2L, 3L);
+        RecommendationRequest request = RecommendationRequest.builder()
+                .viewedProductIds(Arrays.asList(1L, 2L, 3L))
+                .limit(10)
+                .build();
         List<Product> recommendations = Arrays.asList(TestDataFactory.createElectronicsProduct());
         when(recommendationService.getRecommendationsFromHistory(anyList(), anyInt()))
                 .thenReturn(recommendations);
 
-        // Act & Assert
         mockMvc.perform(post("/api/recommendations/from-history")
-                        .param("limit", "10")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(viewedIds)))
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)));
 
@@ -110,12 +103,11 @@ class RecommendationControllerTest {
     }
 
     @Test
+    @DisplayName("Should return complementary products")
     void getComplementaryProducts_ShouldReturnComplementaryItems() throws Exception {
-        // Arrange
         List<Product> complementary = Arrays.asList(TestDataFactory.createElectronicsProduct());
         when(recommendationService.getComplementaryProducts(1L, 10)).thenReturn(complementary);
 
-        // Act & Assert
         mockMvc.perform(get("/api/recommendations/complementary/1")
                         .param("limit", "10"))
                 .andExpect(status().isOk())
@@ -125,12 +117,11 @@ class RecommendationControllerTest {
     }
 
     @Test
+    @DisplayName("Should return trending products")
     void getTrendingProducts_ShouldReturnTrendingProducts() throws Exception {
-        // Arrange
         List<Product> trending = TestDataFactory.createProductList();
         when(recommendationService.getTrendingProducts(10)).thenReturn(trending);
 
-        // Act & Assert
         mockMvc.perform(get("/api/recommendations/trending")
                         .param("limit", "10"))
                 .andExpect(status().isOk())
@@ -140,63 +131,57 @@ class RecommendationControllerTest {
     }
 
     @Test
+    @DisplayName("Should return diverse recommendations")
     void getDiverseRecommendations_ShouldReturnDiverseProducts() throws Exception {
-        // Arrange
         List<Product> diverse = TestDataFactory.createProductList();
-        when(recommendationService.getDiverseRecommendations(anyString(), anyInt()))
-                .thenReturn(diverse);
+        when(recommendationService.getDiverseRecommendations(anyString(), anyInt())).thenReturn(diverse);
 
-        // Act & Assert
         mockMvc.perform(get("/api/recommendations/diverse")
-                        .param("interests", "gaming and books")
+                        .param("userInterests", "outdoor activities")
                         .param("limit", "10"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(5)));
 
-        verify(recommendationService).getDiverseRecommendations(anyString(), eq(10));
+        verify(recommendationService).getDiverseRecommendations("outdoor activities", 10);
     }
 
     @Test
-    void getBudgetAlternatives_ShouldReturnCheaperOptions() throws Exception {
-        // Arrange
-        List<Product> budgetOptions = Arrays.asList(TestDataFactory.createElectronicsProduct());
-        when(recommendationService.getBudgetAlternatives(1L, 10)).thenReturn(budgetOptions);
+    @DisplayName("Should return budget alternatives")
+    void getBudgetAlternatives_ShouldReturnBudgetAlternatives() throws Exception {
+        List<Product> alternatives = Arrays.asList(TestDataFactory.createElectronicsProduct());
+        when(recommendationService.getBudgetAlternatives(1L, 5)).thenReturn(alternatives);
 
-        // Act & Assert
         mockMvc.perform(get("/api/recommendations/budget-alternatives/1")
-                        .param("limit", "10"))
+                        .param("limit", "5"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)));
 
-        verify(recommendationService).getBudgetAlternatives(1L, 10);
+        verify(recommendationService).getBudgetAlternatives(1L, 5);
     }
 
     @Test
-    void getPremiumAlternatives_ShouldReturnPremiumOptions() throws Exception {
-        // Arrange
-        List<Product> premiumOptions = Arrays.asList(TestDataFactory.createElectronicsProduct());
-        when(recommendationService.getPremiumAlternatives(1L, 10)).thenReturn(premiumOptions);
+    @DisplayName("Should return premium alternatives")
+    void getPremiumAlternatives_ShouldReturnPremiumAlternatives() throws Exception {
+        List<Product> alternatives = Arrays.asList(TestDataFactory.createElectronicsProduct());
+        when(recommendationService.getPremiumAlternatives(1L, 5)).thenReturn(alternatives);
 
-        // Act & Assert
         mockMvc.perform(get("/api/recommendations/premium-alternatives/1")
-                        .param("limit", "10"))
+                        .param("limit", "5"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)));
 
-        verify(recommendationService).getPremiumAlternatives(1L, 10);
+        verify(recommendationService).getPremiumAlternatives(1L, 5);
     }
 
     @Test
+    @DisplayName("Should return category recommendations")
     void getCategoryRecommendations_ShouldReturnCategoryProducts() throws Exception {
-        // Arrange
         List<Product> categoryProducts = Arrays.asList(TestDataFactory.createElectronicsProduct());
         when(recommendationService.getCategoryRecommendations(anyString(), anyString(), anyInt()))
                 .thenReturn(categoryProducts);
 
-        // Act & Assert
-        mockMvc.perform(get("/api/recommendations/category")
-                        .param("category", "Electronics")
-                        .param("context", "gaming")
+        mockMvc.perform(get("/api/recommendations/category/Electronics")
+                        .param("userContext", "gaming")
                         .param("limit", "10"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)));
@@ -204,3 +189,4 @@ class RecommendationControllerTest {
         verify(recommendationService).getCategoryRecommendations(eq("Electronics"), eq("gaming"), eq(10));
     }
 }
+

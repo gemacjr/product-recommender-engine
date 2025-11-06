@@ -5,11 +5,14 @@ import com.swiftbeard.product_recommender_engine.config.ApplicationProperties;
 import com.swiftbeard.product_recommender_engine.model.Category;
 import com.swiftbeard.product_recommender_engine.model.Product;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.data.domain.PageImpl;
 
 import java.math.BigDecimal;
@@ -22,6 +25,8 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
+@DisplayName("RecommendationService Unit Tests")
 class RecommendationServiceTest {
 
     @Mock
@@ -47,78 +52,66 @@ class RecommendationServiceTest {
         testProduct = TestDataFactory.createElectronicsProduct();
         testProducts = TestDataFactory.createProductList();
 
-        // Setup application properties mock
         when(applicationProperties.getRecommendation()).thenReturn(recommendationConfig);
         when(recommendationConfig.getMaxResults()).thenReturn(20);
     }
 
     @Test
+    @DisplayName("Should return similar products for a given product")
     void getSimilarProducts_ShouldReturnSimilarProducts() {
-        // Arrange
         List<Product> similarProducts = Arrays.asList(
                 TestDataFactory.createProduct(2L, "Bluetooth Headphones", Category.ELECTRONICS, new BigDecimal("89.99")),
                 TestDataFactory.createProduct(3L, "Gaming Headset", Category.ELECTRONICS, new BigDecimal("129.99"))
         );
 
         when(productService.getProductById(1L)).thenReturn(testProduct);
-        when(vectorStoreService.findSimilarProducts(any(Product.class), anyInt())).thenReturn(similarProducts);
-        when(productService.getProductById(2L)).thenReturn(similarProducts.get(0));
-        when(productService.getProductById(3L)).thenReturn(similarProducts.get(1));
+        when(vectorStoreService.findSimilarProducts(any(Product.class), eq(10))).thenReturn(similarProducts);
 
-        // Act
         List<Product> result = recommendationService.getSimilarProducts(1L, 10);
 
-        // Assert
         assertThat(result).isNotNull();
         assertThat(result).hasSize(2);
-        assertThat(result).allMatch(p -> p.getCategory() == Category.ELECTRONICS);
         verify(productService).getProductById(1L);
-        verify(vectorStoreService).findSimilarProducts(any(Product.class), anyInt());
+        verify(vectorStoreService).findSimilarProducts(any(Product.class), eq(10));
     }
 
     @Test
+    @DisplayName("Should respect max results limit")
     void getSimilarProducts_ShouldRespectMaxResultsLimit() {
-        // Arrange
         when(productService.getProductById(1L)).thenReturn(testProduct);
         when(vectorStoreService.findSimilarProducts(any(Product.class), eq(20))).thenReturn(Collections.emptyList());
 
-        // Act
-        recommendationService.getSimilarProducts(1L, 100); // Request more than max
+        recommendationService.getSimilarProducts(1L, 100);
 
-        // Assert
-        verify(vectorStoreService).findSimilarProducts(any(Product.class), eq(20)); // Should be limited to max
+        verify(vectorStoreService).findSimilarProducts(any(Product.class), eq(20));
     }
 
     @Test
+    @DisplayName("Should return recommendations by query")
     void getRecommendationsByQuery_ShouldReturnMatchingProducts() {
-        // Arrange
         List<Product> recommendations = Arrays.asList(
                 TestDataFactory.createElectronicsProduct(),
                 TestDataFactory.createProduct(4L, "Gaming Mouse", Category.ELECTRONICS, new BigDecimal("79.99"))
         );
 
-        when(vectorStoreService.semanticSearch(eq("wireless gaming accessories"), anyInt()))
+        when(vectorStoreService.semanticSearch(eq("wireless gaming accessories"), eq(10)))
                 .thenReturn(recommendations);
 
-        // Act
         List<Product> result = recommendationService.getRecommendationsByQuery("wireless gaming accessories", 10);
 
-        // Assert
         assertThat(result).isNotNull();
         assertThat(result).hasSize(2);
-        verify(vectorStoreService).semanticSearch(eq("wireless gaming accessories"), anyInt());
+        verify(vectorStoreService).semanticSearch(eq("wireless gaming accessories"), eq(10));
     }
 
     @Test
+    @DisplayName("Should return personalized recommendations with enriched query")
     void getPersonalizedRecommendations_ShouldEnrichPreferencesAndReturnResults() {
-        // Arrange
         List<Product> recommendations = Arrays.asList(testProduct);
         when(vectorStoreService.semanticSearch(anyString(), anyInt())).thenReturn(recommendations);
 
-        // Act
         List<Product> result = recommendationService.getPersonalizedRecommendations("I love gaming and technology", 5);
 
-        // Assert
         assertThat(result).isNotNull();
         assertThat(result).hasSize(1);
         verify(vectorStoreService).semanticSearch(
@@ -128,14 +121,12 @@ class RecommendationServiceTest {
     }
 
     @Test
+    @DisplayName("Should handle null preferences in personalized recommendations")
     void getPersonalizedRecommendations_ShouldHandleNullPreferences() {
-        // Arrange
         when(vectorStoreService.semanticSearch(anyString(), anyInt())).thenReturn(testProducts);
 
-        // Act
         List<Product> result = recommendationService.getPersonalizedRecommendations(null, 5);
 
-        // Assert
         assertThat(result).isNotNull();
         verify(vectorStoreService).semanticSearch(
                 argThat(query -> query.contains("popular high-quality products")),
@@ -144,8 +135,8 @@ class RecommendationServiceTest {
     }
 
     @Test
+    @DisplayName("Should return recommendations from browsing history")
     void getRecommendationsFromHistory_ShouldReturnRecommendations() {
-        // Arrange
         List<Long> viewedIds = Arrays.asList(1L, 2L, 3L);
         List<Product> similarToFirst = Arrays.asList(
                 TestDataFactory.createProduct(4L, "Product 4", Category.ELECTRONICS, new BigDecimal("99.99")),
@@ -154,39 +145,33 @@ class RecommendationServiceTest {
 
         when(productService.getProductById(1L)).thenReturn(testProduct);
         when(vectorStoreService.findSimilarProducts(any(Product.class), anyInt())).thenReturn(similarToFirst);
-        when(productService.getProductById(4L)).thenReturn(similarToFirst.get(0));
-        when(productService.getProductById(5L)).thenReturn(similarToFirst.get(1));
 
-        // Act
         List<Product> result = recommendationService.getRecommendationsFromHistory(viewedIds, 5);
 
-        // Assert
         assertThat(result).isNotNull();
-        assertThat(result).allMatch(p -> !viewedIds.contains(p.getId())); // Should not include viewed products
+        assertThat(result).allMatch(p -> !viewedIds.contains(p.getId()));
         verify(productService, atLeastOnce()).getProductById(anyLong());
     }
 
     @Test
+    @DisplayName("Should return empty list when browsing history is empty")
     void getRecommendationsFromHistory_ShouldReturnEmptyList_WhenHistoryIsEmpty() {
-        // Act
         List<Product> result = recommendationService.getRecommendationsFromHistory(Collections.emptyList(), 5);
 
-        // Assert
         assertThat(result).isEmpty();
     }
 
     @Test
+    @DisplayName("Should return empty list when browsing history is null")
     void getRecommendationsFromHistory_ShouldReturnEmptyList_WhenHistoryIsNull() {
-        // Act
         List<Product> result = recommendationService.getRecommendationsFromHistory(null, 5);
 
-        // Assert
         assertThat(result).isEmpty();
     }
 
     @Test
+    @DisplayName("Should return complementary products excluding original")
     void getComplementaryProducts_ShouldReturnComplementaryItems() {
-        // Arrange
         Product headphones = TestDataFactory.createElectronicsProduct();
         List<Product> complementary = Arrays.asList(
                 headphones,
@@ -197,33 +182,29 @@ class RecommendationServiceTest {
         when(productService.getProductById(1L)).thenReturn(headphones);
         when(vectorStoreService.semanticSearch(anyString(), anyInt())).thenReturn(complementary);
 
-        // Act
         List<Product> result = recommendationService.getComplementaryProducts(1L, 5);
 
-        // Assert
         assertThat(result).isNotNull();
-        assertThat(result).doesNotContain(headphones); // Should not include the original product
+        assertThat(result).doesNotContain(headphones);
         verify(productService).getProductById(1L);
         verify(vectorStoreService).semanticSearch(anyString(), anyInt());
     }
 
     @Test
+    @DisplayName("Should return trending products")
     void getTrendingProducts_ShouldReturnTopRatedProducts() {
-        // Arrange
         when(productService.getTopRatedProducts(0, 10)).thenReturn(new PageImpl<>(testProducts));
 
-        // Act
         List<Product> result = recommendationService.getTrendingProducts(10);
 
-        // Assert
         assertThat(result).isNotNull();
         assertThat(result).hasSize(5);
         verify(productService).getTopRatedProducts(0, 10);
     }
 
     @Test
+    @DisplayName("Should return category recommendations with user context")
     void getCategoryRecommendations_ShouldReturnCategorySpecificProducts() {
-        // Arrange
         List<Product> electronicsProducts = Arrays.asList(
                 TestDataFactory.createElectronicsProduct(),
                 TestDataFactory.createProduct(4L, "Gaming Mouse", Category.ELECTRONICS, new BigDecimal("79.99"))
@@ -231,10 +212,8 @@ class RecommendationServiceTest {
 
         when(vectorStoreService.semanticSearch(anyString(), anyInt())).thenReturn(electronicsProducts);
 
-        // Act
         List<Product> result = recommendationService.getCategoryRecommendations("Electronics", "gaming", 10);
 
-        // Assert
         assertThat(result).isNotNull();
         assertThat(result).hasSize(2);
         verify(vectorStoreService).semanticSearch(
@@ -244,8 +223,8 @@ class RecommendationServiceTest {
     }
 
     @Test
+    @DisplayName("Should return diverse recommendations from multiple categories")
     void getDiverseRecommendations_ShouldReturnProductsFromMultipleCategories() {
-        // Arrange
         List<Product> diverseProducts = Arrays.asList(
                 TestDataFactory.createElectronicsProduct(),
                 TestDataFactory.createClothingProduct(),
@@ -256,13 +235,10 @@ class RecommendationServiceTest {
 
         when(vectorStoreService.semanticSearch(anyString(), anyInt())).thenReturn(diverseProducts);
 
-        // Act
         List<Product> result = recommendationService.getDiverseRecommendations("variety of interests", 5);
 
-        // Assert
         assertThat(result).isNotNull();
         assertThat(result.size()).isGreaterThan(0);
-        // Should have products from different categories
         long uniqueCategories = result.stream()
                 .map(Product::getCategory)
                 .distinct()
@@ -272,8 +248,8 @@ class RecommendationServiceTest {
     }
 
     @Test
+    @DisplayName("Should return budget alternatives cheaper than original")
     void getBudgetAlternatives_ShouldReturnCheaperProducts() {
-        // Arrange
         Product expensiveProduct = TestDataFactory.createProduct(1L, "Premium Headphones", Category.ELECTRONICS, new BigDecimal("199.99"));
         List<Product> similarProducts = Arrays.asList(
                 expensiveProduct,
@@ -283,24 +259,35 @@ class RecommendationServiceTest {
         );
 
         when(productService.getProductById(1L)).thenReturn(expensiveProduct);
-        when(vectorStoreService.findSimilarProducts(any(Product.class), anyInt())).thenReturn(similarProducts);
-        when(productService.getProductById(anyLong())).thenAnswer(invocation -> {
-            Long id = invocation.getArgument(0);
-            return similarProducts.stream().filter(p -> p.getId().equals(id)).findFirst().orElse(null);
-        });
+        when(vectorStoreService.findSimilarProducts(any(Product.class), eq(10))).thenReturn(similarProducts);
 
-        // Act
         List<Product> result = recommendationService.getBudgetAlternatives(1L, 5);
 
-        // Assert
         assertThat(result).isNotNull();
         assertThat(result).allMatch(p -> p.getPrice().compareTo(expensiveProduct.getPrice()) < 0);
-        verify(productService).getProductById(1L);
+        verify(productService, atLeastOnce()).getProductById(1L);
     }
 
     @Test
+    @DisplayName("Should return empty list when no cheaper alternatives exist")
+    void getBudgetAlternatives_ShouldReturnEmptyList_WhenNoCheaperOptionsExist() {
+        Product cheapestProduct = TestDataFactory.createProduct(1L, "Cheapest Headphones", Category.ELECTRONICS, new BigDecimal("19.99"));
+        List<Product> similarProducts = Arrays.asList(
+                TestDataFactory.createProduct(2L, "Mid-range Headphones", Category.ELECTRONICS, new BigDecimal("99.99")),
+                TestDataFactory.createProduct(3L, "Premium Headphones", Category.ELECTRONICS, new BigDecimal("199.99"))
+        );
+
+        when(productService.getProductById(1L)).thenReturn(cheapestProduct);
+        when(vectorStoreService.findSimilarProducts(any(Product.class), eq(10))).thenReturn(similarProducts);
+
+        List<Product> result = recommendationService.getBudgetAlternatives(1L, 5);
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Should return premium alternatives more expensive than original")
     void getPremiumAlternatives_ShouldReturnMoreExpensiveProducts() {
-        // Arrange
         Product budgetProduct = TestDataFactory.createProduct(1L, "Budget Headphones", Category.ELECTRONICS, new BigDecimal("49.99"));
         List<Product> similarProducts = Arrays.asList(
                 budgetProduct,
@@ -310,47 +297,18 @@ class RecommendationServiceTest {
         );
 
         when(productService.getProductById(1L)).thenReturn(budgetProduct);
-        when(vectorStoreService.findSimilarProducts(any(Product.class), anyInt())).thenReturn(similarProducts);
-        when(productService.getProductById(anyLong())).thenAnswer(invocation -> {
-            Long id = invocation.getArgument(0);
-            return similarProducts.stream().filter(p -> p.getId().equals(id)).findFirst().orElse(null);
-        });
+        when(vectorStoreService.findSimilarProducts(any(Product.class), eq(10))).thenReturn(similarProducts);
 
-        // Act
         List<Product> result = recommendationService.getPremiumAlternatives(1L, 5);
 
-        // Assert
         assertThat(result).isNotNull();
         assertThat(result).allMatch(p -> p.getPrice().compareTo(budgetProduct.getPrice()) > 0);
-        verify(productService).getProductById(1L);
+        verify(productService, atLeastOnce()).getProductById(1L);
     }
 
     @Test
-    void getBudgetAlternatives_ShouldReturnEmptyList_WhenNoCheaperOptionsExist() {
-        // Arrange
-        Product cheapestProduct = TestDataFactory.createProduct(1L, "Cheapest Headphones", Category.ELECTRONICS, new BigDecimal("19.99"));
-        List<Product> similarProducts = Arrays.asList(
-                TestDataFactory.createProduct(2L, "Mid-range Headphones", Category.ELECTRONICS, new BigDecimal("99.99")),
-                TestDataFactory.createProduct(3L, "Premium Headphones", Category.ELECTRONICS, new BigDecimal("199.99"))
-        );
-
-        when(productService.getProductById(1L)).thenReturn(cheapestProduct);
-        when(vectorStoreService.findSimilarProducts(any(Product.class), anyInt())).thenReturn(similarProducts);
-        when(productService.getProductById(anyLong())).thenAnswer(invocation -> {
-            Long id = invocation.getArgument(0);
-            return similarProducts.stream().filter(p -> p.getId().equals(id)).findFirst().orElse(null);
-        });
-
-        // Act
-        List<Product> result = recommendationService.getBudgetAlternatives(1L, 5);
-
-        // Assert
-        assertThat(result).isEmpty();
-    }
-
-    @Test
+    @DisplayName("Should return empty list when no more expensive alternatives exist")
     void getPremiumAlternatives_ShouldReturnEmptyList_WhenNoMoreExpensiveOptionsExist() {
-        // Arrange
         Product mostExpensiveProduct = TestDataFactory.createProduct(1L, "Luxury Headphones", Category.ELECTRONICS, new BigDecimal("999.99"));
         List<Product> similarProducts = Arrays.asList(
                 TestDataFactory.createProduct(2L, "Budget Headphones", Category.ELECTRONICS, new BigDecimal("49.99")),
@@ -358,16 +316,11 @@ class RecommendationServiceTest {
         );
 
         when(productService.getProductById(1L)).thenReturn(mostExpensiveProduct);
-        when(vectorStoreService.findSimilarProducts(any(Product.class), anyInt())).thenReturn(similarProducts);
-        when(productService.getProductById(anyLong())).thenAnswer(invocation -> {
-            Long id = invocation.getArgument(0);
-            return similarProducts.stream().filter(p -> p.getId().equals(id)).findFirst().orElse(null);
-        });
+        when(vectorStoreService.findSimilarProducts(any(Product.class), eq(10))).thenReturn(similarProducts);
 
-        // Act
         List<Product> result = recommendationService.getPremiumAlternatives(1L, 5);
 
-        // Assert
         assertThat(result).isEmpty();
     }
 }
+

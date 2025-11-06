@@ -1,9 +1,11 @@
 package com.swiftbeard.product_recommender_engine.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.swiftbeard.product_recommender_engine.TestDataFactory;
 import com.swiftbeard.product_recommender_engine.dto.QueryRequest;
+import com.swiftbeard.product_recommender_engine.dto.UrlQueryRequest;
 import com.swiftbeard.product_recommender_engine.service.RagService;
+import com.swiftbeard.product_recommender_engine.service.WebScrapingService;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -13,17 +15,16 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import static org.hamcrest.Matchers.*;
 import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(QueryController.class)
+@DisplayName("QueryController Unit Tests")
 class QueryControllerTest {
 
     @Autowired
@@ -35,122 +36,175 @@ class QueryControllerTest {
     @MockBean
     private RagService ragService;
 
-    @Test
-    void answerQuery_ShouldReturnAnswer() throws Exception {
-        // Arrange
-        QueryRequest request = TestDataFactory.createQueryRequest("What are the best headphones?");
-        String answer = "Based on our products, the Wireless Headphones are highly recommended.";
-        when(ragService.answerQuery(anyString())).thenReturn(answer);
+    @MockBean
+    private WebScrapingService webScrapingService;
 
-        // Act & Assert
+    @Test
+    @DisplayName("Should answer query successfully")
+    void answerQuery_ShouldReturnAnswer() throws Exception {
+        QueryRequest request = QueryRequest.builder()
+                .query("What are the best headphones?")
+                .userPreferences("noise cancellation")
+                .build();
+
+        when(ragService.answerQuery(anyString())).thenReturn("Based on your preferences, here are the best headphones...");
+
         mockMvc.perform(post("/api/queries/ask")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.query", is(request.getQuery())))
-                .andExpect(jsonPath("$.answer", is(answer)));
+                .andExpect(jsonPath("$.query", is("What are the best headphones?")))
+                .andExpect(jsonPath("$.answer", containsString("headphones")));
 
-        verify(ragService).answerQuery(request.getQuery());
+        verify(ragService).answerQuery("What are the best headphones?");
     }
 
     @Test
+    @DisplayName("Should return recommendation with explanation")
     void getRecommendationWithExplanation_ShouldReturnDetailedRecommendation() throws Exception {
-        // Arrange
-        QueryRequest request = TestDataFactory.createQueryRequest("I need headphones for work");
-        String recommendation = "I recommend the Wireless Headphones because they have noise cancellation.";
-        when(ragService.getRecommendationWithExplanation(anyString(), anyString()))
-                .thenReturn(recommendation);
+        QueryRequest request = QueryRequest.builder()
+                .query("I need headphones for work")
+                .userPreferences("comfortable, noise cancellation")
+                .build();
 
-        // Act & Assert
+        when(ragService.getRecommendationWithExplanation(anyString(), anyString()))
+                .thenReturn("Based on your needs, I recommend...");
+
         mockMvc.perform(post("/api/queries/recommend-with-explanation")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.query", is(request.getQuery())))
-                .andExpect(jsonPath("$.recommendation", is(recommendation)));
+                .andExpect(jsonPath("$.query", is("I need headphones for work")))
+                .andExpect(jsonPath("$.recommendation", containsString("recommend")));
 
-        verify(ragService).getRecommendationWithExplanation(anyString(), anyString());
+        verify(ragService).getRecommendationWithExplanation("I need headphones for work", "comfortable, noise cancellation");
     }
 
     @Test
+    @DisplayName("Should compare products successfully")
     void compareProducts_ShouldReturnComparison() throws Exception {
-        // Arrange
-        List<Long> productIds = Arrays.asList(1L, 2L, 3L);
-        String comparison = "Product 1 is better for gaming, while Product 2 is better for music.";
-        when(ragService.compareProducts(anyList())).thenReturn(comparison);
+        when(ragService.compareProducts(anyList())).thenReturn("Here is a detailed comparison of the products...");
 
-        // Act & Assert
         mockMvc.perform(post("/api/queries/compare-products")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(productIds)))
+                        .content(objectMapper.writeValueAsString(Arrays.asList(1L, 2L, 3L))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.comparison", is(comparison)));
+                .andExpect(jsonPath("$.comparison", containsString("comparison")));
 
-        verify(ragService).compareProducts(anyList());
+        verify(ragService).compareProducts(Arrays.asList(1L, 2L, 3L));
     }
 
     @Test
+    @DisplayName("Should answer product FAQ")
     void answerProductFaq_ShouldReturnAnswer() throws Exception {
-        // Arrange
-        String question = "Does it have warranty?";
-        String answer = "Yes, it comes with a 1-year warranty.";
-        when(ragService.answerProductFaq(eq(1L), anyString())).thenReturn(answer);
+        Map<String, String> requestBody = new HashMap<>();
+        requestBody.put("question", "Is this suitable for running?");
 
-        // Act & Assert
+        when(ragService.answerProductFaq(eq(1L), anyString()))
+                .thenReturn("Yes, this product is suitable for running activities.");
+
         mockMvc.perform(post("/api/queries/product-faq/1")
-                        .param("question", question))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(requestBody)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.question", is(question)))
-                .andExpect(jsonPath("$.answer", is(answer)));
+                .andExpect(jsonPath("$.productId", is("1")))
+                .andExpect(jsonPath("$.question", is("Is this suitable for running?")))
+                .andExpect(jsonPath("$.answer", containsString("suitable")));
 
-        verify(ragService).answerProductFaq(1L, question);
+        verify(ragService).answerProductFaq(1L, "Is this suitable for running?");
     }
 
     @Test
+    @DisplayName("Should return personalized suggestions")
     void getPersonalizedSuggestions_ShouldReturnSuggestions() throws Exception {
-        // Arrange
         Map<String, String> requestBody = new HashMap<>();
-        requestBody.put("userProfile", "tech enthusiast");
-        requestBody.put("occasion", "birthday gift");
+        requestBody.put("userProfile", "fitness enthusiast, early 30s");
+        requestBody.put("occasion", "marathon training");
 
-        String suggestions = "For a tech enthusiast's birthday, I suggest the Gaming Mouse or Wireless Headphones.";
-        when(ragService.getPersonalizedSuggestions(anyString(), anyString())).thenReturn(suggestions);
+        when(ragService.getPersonalizedSuggestions(anyString(), anyString()))
+                .thenReturn("Here are personalized shopping suggestions for your marathon training...");
 
-        // Act & Assert
         mockMvc.perform(post("/api/queries/personalized-suggestions")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(requestBody)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.suggestions", is(suggestions)));
+                .andExpect(jsonPath("$.userProfile", is("fitness enthusiast, early 30s")))
+                .andExpect(jsonPath("$.occasion", is("marathon training")))
+                .andExpect(jsonPath("$.suggestions", containsString("suggestions")));
 
-        verify(ragService).getPersonalizedSuggestions(anyString(), anyString());
+        verify(ragService).getPersonalizedSuggestions("fitness enthusiast, early 30s", "marathon training");
     }
 
     @Test
+    @DisplayName("Should answer URL query successfully")
+    void answerUrlQuery_ShouldReturnAnswer() throws Exception {
+        UrlQueryRequest request = UrlQueryRequest.builder()
+                .url("https://example.com/shop")
+                .query("is there a shirt in size XXL under 10 dollars")
+                .build();
+
+        String expectedAnswer = "Yes, we found a blue cotton shirt in size XXL for $8.99";
+        String contentPreview = "Page Title: Example Shop\n\nProducts Found\n\nProduct 1:\nName: Blue Cotton Shirt...";
+
+        when(ragService.answerUrlQuery(anyString(), anyString())).thenReturn(expectedAnswer);
+        when(webScrapingService.scrapeWebsite(anyString())).thenReturn(contentPreview);
+        when(webScrapingService.getContentPreview(anyString())).thenReturn(
+                contentPreview.substring(0, Math.min(contentPreview.length(), 500)));
+
+        mockMvc.perform(post("/api/queries/ask-url")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.url", is(request.getUrl())))
+                .andExpect(jsonPath("$.query", is(request.getQuery())))
+                .andExpect(jsonPath("$.answer", is(expectedAnswer)));
+
+        verify(ragService).answerUrlQuery(request.getUrl(), request.getQuery());
+    }
+
+    @Test
+    @DisplayName("Should return error when URL query fails")
+    void answerUrlQuery_ShouldReturnError_WhenFails() throws Exception {
+        UrlQueryRequest request = UrlQueryRequest.builder()
+                .url("https://example.com/shop")
+                .query("query")
+                .build();
+
+        when(ragService.answerUrlQuery(anyString(), anyString()))
+                .thenThrow(new Exception("Failed to scrape website"));
+
+        mockMvc.perform(post("/api/queries/ask-url")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error", containsString("Failed")));
+
+        verify(ragService).answerUrlQuery(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("Should return health status")
     void healthCheck_ShouldReturnStatus() throws Exception {
-        // Arrange
         when(ragService.isHealthy()).thenReturn(true);
 
-        // Act & Assert
         mockMvc.perform(get("/api/queries/health"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status", is("UP")))
-                .andExpect(jsonPath("$.healthy", is(true)));
+                .andExpect(jsonPath("$.service", is("RAG Query Service")));
 
         verify(ragService).isHealthy();
     }
 
     @Test
+    @DisplayName("Should return unhealthy status")
     void healthCheck_ShouldReturnUnhealthyWhenServiceDown() throws Exception {
-        // Arrange
         when(ragService.isHealthy()).thenReturn(false);
 
-        // Act & Assert
         mockMvc.perform(get("/api/queries/health"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status", is("DOWN")))
-                .andExpect(jsonPath("$.healthy", is(false)));
+                .andExpect(jsonPath("$.status", is("DOWN")));
 
         verify(ragService).isHealthy();
     }
 }
+

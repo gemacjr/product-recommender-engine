@@ -22,6 +22,7 @@ import java.util.List;
 @Slf4j
 public class DataLoader {
 
+
     @Bean
     CommandLineRunner loadSampleData(ProductRepository productRepository, VectorStoreService vectorStoreService) {
         return args -> {
