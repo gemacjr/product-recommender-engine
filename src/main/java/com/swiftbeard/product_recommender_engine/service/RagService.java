@@ -27,6 +27,7 @@ public class RagService {
     private final VectorStoreService vectorStoreService;
     private final ChatModel chatModel;
     private final ApplicationProperties applicationProperties;
+    private final WebScrapingService webScrapingService;
 
     /**
      * Answer a customer query using RAG pattern
@@ -284,6 +285,69 @@ public class RagService {
 
                 Please provide a helpful answer based on the product information above.
                 """, context, query);
+
+        List<Message> messages = new ArrayList<>();
+        messages.add(new SystemMessage(systemPrompt));
+        messages.add(new UserMessage(userPrompt));
+
+        Prompt prompt = new Prompt(messages);
+        return chatModel.call(prompt).getResult().getOutput().getContent();
+    }
+
+    /**
+     * Answer a query about a shopping website URL
+     */
+    public String answerUrlQuery(String url, String query) throws Exception {
+        log.info("Answering URL-based query for: {} with query: {}", url, query);
+
+        // Step 1: Scrape the website content
+        String scrapedContent;
+        try {
+            scrapedContent = webScrapingService.scrapeWebsite(url);
+        } catch (Exception e) {
+            log.error("Failed to scrape website: {}", url, e);
+            throw new Exception("Failed to fetch content from the URL: " + e.getMessage(), e);
+        }
+
+        if (scrapedContent == null || scrapedContent.trim().isEmpty()) {
+            return "I couldn't retrieve any content from the provided URL. Please check if the URL is correct and accessible.";
+        }
+
+        // Step 2: Use AI to analyze the scraped content against the query
+        String answer = analyzeScrapedContent(scrapedContent, query, url);
+
+        log.info("Successfully answered URL-based query");
+        return answer;
+    }
+
+    /**
+     * Analyze scraped website content using AI to answer the user's query
+     */
+    private String analyzeScrapedContent(String scrapedContent, String query, String url) {
+        String systemPrompt = """
+                You are a helpful shopping assistant analyzing content from an e-commerce website.
+                Your job is to answer the customer's question based on the website content provided.
+
+                Be accurate and specific. If you find products matching the criteria, list them clearly
+                with their details (name, price, size, etc.). If you don't find matching products,
+                explain what's available instead or suggest alternatives.
+
+                If the information is not clear or not available in the content, say so honestly.
+                """;
+
+        String userPrompt = String.format("""
+                Website URL: %s
+
+                Website Content:
+                %s
+
+                Customer Question: %s
+
+                Please analyze the website content and answer the customer's question.
+                Be specific about product details like names, prices, sizes, and availability.
+                If you find multiple matching products, list them all.
+                If you don't find exact matches, explain what's available and suggest alternatives.
+                """, url, scrapedContent, query);
 
         List<Message> messages = new ArrayList<>();
         messages.add(new SystemMessage(systemPrompt));
