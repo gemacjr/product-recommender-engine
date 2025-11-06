@@ -2,7 +2,10 @@ package com.swiftbeard.product_recommender_engine.controller;
 
 import com.swiftbeard.product_recommender_engine.dto.QueryRequest;
 import com.swiftbeard.product_recommender_engine.dto.QueryResponse;
+import com.swiftbeard.product_recommender_engine.dto.UrlQueryRequest;
+import com.swiftbeard.product_recommender_engine.dto.UrlQueryResponse;
 import com.swiftbeard.product_recommender_engine.service.RagService;
+import com.swiftbeard.product_recommender_engine.service.WebScrapingService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +26,7 @@ import java.util.Map;
 public class QueryController {
 
     private final RagService ragService;
+    private final WebScrapingService webScrapingService;
 
     /**
      * Answer a customer query using RAG
@@ -118,6 +122,44 @@ public class QueryController {
         response.put("suggestions", suggestions);
 
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Answer a query about a shopping website URL
+     */
+    @PostMapping("/ask-url")
+    public ResponseEntity<?> answerUrlQuery(@Valid @RequestBody UrlQueryRequest request) {
+        log.info("POST /api/queries/ask-url - URL: {}, Query: {}", request.getUrl(), request.getQuery());
+
+        try {
+            String answer = ragService.answerUrlQuery(request.getUrl(), request.getQuery());
+
+            // Get content preview for debugging
+            String contentPreview = null;
+            try {
+                String scrapedContent = webScrapingService.scrapeWebsite(request.getUrl());
+                contentPreview = webScrapingService.getContentPreview(scrapedContent);
+            } catch (Exception e) {
+                log.warn("Failed to get content preview: {}", e.getMessage());
+            }
+
+            UrlQueryResponse response = UrlQueryResponse.builder()
+                    .url(request.getUrl())
+                    .query(request.getQuery())
+                    .answer(answer)
+                    .scrapedContentPreview(contentPreview)
+                    .build();
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            log.error("Error processing URL query", e);
+            Map<String, String> errorResponse = new HashMap<>();
+            errorResponse.put("error", "Failed to process your request: " + e.getMessage());
+            errorResponse.put("url", request.getUrl());
+            errorResponse.put("query", request.getQuery());
+            return ResponseEntity.badRequest().body(errorResponse);
+        }
     }
 
     /**
